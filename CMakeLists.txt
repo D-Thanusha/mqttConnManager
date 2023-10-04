@@ -67,8 +67,8 @@ add_dependencies(libmosquitto mosquitto)
 #-------------------------------------------------------------------------------
 ExternalProject_Add(cimplog
     PREFIX ${CMAKE_CURRENT_BINARY_DIR}/_prefix/cimplog
-    GIT_REPOSITORY https://github.com/Comcast/cimplog.git
-    GIT_TAG "1.0.2"
+    GIT_REPOSITORY https://github.com/D-Thanusha/cimplog.git
+    GIT_TAG mqtt
     CMAKE_ARGS += -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR}
 )
 add_library(libcimplog STATIC SHARED IMPORTED)

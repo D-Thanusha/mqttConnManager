@@ -152,210 +152,36 @@ int mqttCMRbus_Uninit()
     return 1;
 }
 
+int tsp_disconnected_cb(int reason_code) {
+    printf("The reason code received is %d\n", reason_code);
+	return 0;
+}
+
 //Initialize mqtt library and connect to mqtt broker
 bool mqttCMConnectBroker()
 {
 	char *username = NULL;
-	int rc;
-	int port = 0;
-	mqtt_timer_t mqtt_timer;
-	int tls_count = 0;
-	int rt = 0;
-	char *bind_interface = NULL;
-	char *hostip = NULL;
+	int rc = 0;
 
 	checkMqttParamSet();
+	RegisterCB(&tsp_disconnected_cb);
 	
-	res_init();
-	
-	MqttCMInfo("Initializing MQTT library\n");
-	mosquitto_lib_init();
-
-	int clean_session = false;
+	cimplog_info("MQTTCM","Initializing MQTT library\n");
 
 	if (clientId !=NULL)
 	{
-		while(1)
-		{
+		
 			username = clientId;
 			MqttCMInfo("clientId is %s username is %s\n", clientId, username);
-
-			execute_mqtt_script(OPENSYNC_CERT);
-
-			if(clientId !=NULL)
+			//int res = connectMqttBroker(void (*tsp_disconnected_cb)(int));
+			int res = connectMqttBroker();
+			if(res == MOSQ_ERR_SUCCESS)
 			{
-				mosq = mosquitto_new(clientId, clean_session, NULL);
+				MqttCMInfo("connectMqttBroker success\n");
 			}
-			else
-			{
-				MqttCMInfo("clientId is NULL, init with clean_session true\n");
-				mosq = mosquitto_new(NULL, true, NULL);
-			}
-			if(!mosq)
-			{
-				MqttCMError("Error initializing mosq instance\n");
-				return MOSQ_ERR_NOMEM;
-			}
-			mosquitto_int_option(mosq, MOSQ_OPT_PROTOCOL_VERSION, MQTT_PROTOCOL_V5);
-			struct libmosquitto_tls *tls;
-			tls = malloc (sizeof (struct libmosquitto_tls));
-			if(tls)
-			{
-				memset(tls, 0, sizeof(struct libmosquitto_tls));
 
-				char * CAFILE, *CERTFILE , *KEYFILE = NULL;
 
-				get_from_file("CA_FILE_PATH=", &CAFILE, MQTT_CONFIG_FILE);
-				get_from_file("CERT_FILE_PATH=", &CERTFILE, MQTT_CONFIG_FILE);
-				get_from_file("KEY_FILE_PATH=", &KEYFILE, MQTT_CONFIG_FILE);
-
-				if(CAFILE !=NULL && CERTFILE!=NULL && KEYFILE !=NULL)
-				{
-					MqttCMInfo("CAFILE %s, CERTFILE %s, KEYFILE %s MOSQ_TLS_VERSION %s\n", CAFILE, CERTFILE, KEYFILE, MOSQ_TLS_VERSION);
-
-					tls->cafile = CAFILE;
-					tls->certfile = CERTFILE;
-					tls->keyfile = KEYFILE;
-					tls->tls_version = MOSQ_TLS_VERSION;
-
-					rc = mosquitto_tls_set(mosq, tls->cafile, tls->capath, tls->certfile, tls->keyfile, tls->pw_callback);
-					MqttCMInfo("mosquitto_tls_set rc %d\n", rc);
-					if(rc)
-					{
-						MqttCMError("Failed in mosquitto_tls_set %d %s\n", rc, mosquitto_strerror(rc));
-					}
-					else
-					{
-						rc = mosquitto_tls_opts_set(mosq, tls->cert_reqs, tls->tls_version, tls->ciphers);
-						MqttCMInfo("mosquitto_tls_opts_set rc %d\n", rc);
-						if(rc)
-						{
-							MqttCMError("Failed in mosquitto_tls_opts_set %d %s\n", rc, mosquitto_strerror(rc));
-						}
-					}
-
-				}
-				else
-				{
-					MqttCMError("Failed to get tls cert files\n");
-					rc = 1;
-				}
-
-				if(rc != MOSQ_ERR_SUCCESS)
-				{
-					if(tls_count < 3)
-					{
-						sleep(10);
-						MqttCMInfo("Mqtt tls cert Retry %d in progress\n", tls_count+1);
-						mosquitto_destroy(mosq);
-						tls_count++;
-					}
-					else
-					{
-						MqttCMError("Mqtt tls cert retry failed!!!, Abort the process\n");
-
-						mosquitto_destroy(mosq);
-
-						MQTTCM_FREE(CAFILE);
-						MQTTCM_FREE(CERTFILE);
-						MQTTCM_FREE(KEYFILE);
-						abort();
-					}
-				}
-				else
-				{
-					tls_count = 0;
-					//connect to mqtt broker
-					mosquitto_connect_v5_callback_set(mosq, on_connect);
-					mosquitto_disconnect_v5_callback_set(mosq, on_disconnect);
-					mosquitto_subscribe_v5_callback_set(mosq, on_subscribe);
-					mosquitto_message_v5_callback_set(mosq, on_message);
-					mosquitto_publish_v5_callback_set(mosq, on_publish);
-
-					MqttCMDebug("port %d\n", port);
-
-					init_mqtt_timer(&mqtt_timer, MAX_MQTT_RETRY);
-
-					get_interface(&bind_interface);
-					if(bind_interface != NULL)
-					{
-						MqttCMInfo("Interface fetched for mqtt connect bind is %s\n", bind_interface);
-						rt = getHostIPFromInterface(bind_interface, &hostip);
-						if(rt == 1)
-						{
-							MqttCMInfo("hostip fetched from getHostIPFromInterface is %s\n", hostip);
-						}
-						else
-						{
-							MqttCMError("getHostIPFromInterface failed %d\n", rt);
-						}
-					}
-					while(1)
-					{
-
-						MqttCMInfo("Port fetched from TR181 is %s\n", Port);
-						if(Port !=NULL && strlen(Port) > 0)
-						{
-							port = atoi(Port);
-						}
-						else
-						{
-							port = MQTT_PORT;
-						}
-						MqttCMDebug("port int %d\n", port);
-
-						rc = mosquitto_connect_bind_v5(mosq, broker, port, KEEPALIVE, hostip, NULL);
-
-						MqttCMInfo("mosquitto_connect_bind rc %d\n", rc);
-						if(rc != MOSQ_ERR_SUCCESS)
-						{
-
-							MqttCMError("mqtt connect Error: %s\n", mosquitto_strerror(rc));
-							if(mqtt_retry(&mqtt_timer) != MQTT_DELAY_TAKEN)
-							{
-								mosquitto_destroy(mosq);
-
-								MQTTCM_FREE(CAFILE);
-								MQTTCM_FREE(CERTFILE);
-								MQTTCM_FREE(KEYFILE);
-								return rc;
-							}
-						}
-						else
-						{
-							MqttCMInfo("mqtt broker connect success %d\n", rc);
-							break;
-						}
-					}
-
-					MqttCMDebug("mosquitto_loop_forever\n");
-					rc = mosquitto_loop_forever(mosq, -1, 1);
-					if(rc != MOSQ_ERR_SUCCESS)
-					{
-						mosquitto_destroy(mosq);
-						MqttCMError("mosquitto_loop_start Error: %s\n", mosquitto_strerror(rc));
-
-						MQTTCM_FREE(CAFILE);
-						MQTTCM_FREE(CERTFILE);
-						MQTTCM_FREE(KEYFILE);
-						return rc;
-					}
-					else
-					{
-						mosquitto_destroy(mosq);
-						mosquitto_lib_cleanup();
-						MqttCMDebug("after loop rc is %d\n", rc);
-						break;
-					}
-				}
-			}
-			else
-			{
-				MqttCMError("Allocation failed\n");
-				rc = MOSQ_ERR_NOMEM;
-			}
-		}
-
+		
 	}
 	else
 	{
@@ -611,7 +437,7 @@ void on_publish(struct mosquitto *mosq, void *obj, int mid, int reason_code, con
 }
 
 // callback called when the client gets DISCONNECT command from the broker
-void on_disconnect(struct mosquitto *mosq, void *obj, int reason_code, const mosquitto_property *props)
+/*void on_disconnect(struct mosquitto *mosq, void *obj, int reason_code, const mosquitto_property *props)
 {
         MqttCMInfo("on_disconnect: reason_code %d %s\n", reason_code, mosquitto_reason_string(reason_code));
 
@@ -628,7 +454,7 @@ void on_disconnect(struct mosquitto *mosq, void *obj, int reason_code, const mos
 		MqttCMInfo("%s component is unsubscribed from topic %s\n", temp->compName, temp->topic);
 		temp = temp->next;
 	}
-}
+}*/
 
 /* Enables rbus ERROR level logs in mqttcm. Modify RBUS_LOG_ERROR check if more debug logs are needed from rbus. */
 void rbus_log_handler(

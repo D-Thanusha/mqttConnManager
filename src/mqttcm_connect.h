@@ -44,7 +44,7 @@
 
 #define MQTT_COMPONENT_NAME  "mqttConnManager"
 #define MQTT_SUBSCRIBE_TOPIC "x/to/"
-#define MQTT_CONFIG_FILE     "/tmp/.mqttconfig"
+#define MQTT_CONFIG_FILE     "/home/infosys/Documents/conn_manager/.mqttconfig"
 #define MOSQ_TLS_VERSION     "tlsv1.2"
 #define OPENSYNC_CERT        "/etc/mqttcm/mqtt_cert_init.sh"
 #define KEEPALIVE            60
@@ -97,7 +97,7 @@ typedef struct comp_topic_name
 int AddToSubscriptionList(char *compName, char *topic, int writeFlag);
 const char *getComponentFromTopicName(char *topic);
 void on_connect(struct mosquitto *mosq, void *obj, int reason_code, int flag, const mosquitto_property *props);
-void on_disconnect(struct mosquitto *mosq, void *obj, int reason_code, const mosquitto_property *props);
+//void on_disconnect(struct mosquitto *mosq, void *obj, int reason_code, const mosquitto_property *props);
 void on_subscribe(struct mosquitto *mosq, void *obj, int mid, int qos_count, const int *granted_qos, const mosquitto_property *props);
 void on_message(struct mosquitto *mosq, void *obj, const struct mosquitto_message *msg, const mosquitto_property *props);
 void on_publish(struct mosquitto *mosq, void *obj, int mid, int reason_code, const mosquitto_property *props);
